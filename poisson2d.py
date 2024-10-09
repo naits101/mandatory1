@@ -46,7 +46,12 @@ class Poisson2D:
 
     def laplace(self):
         """Return vectorized Laplace operator"""
-        raise NotImplementedError
+        D2x = (1/self.h)**2*self.D2()
+        D2y = (1/self.h)**2*self.D2()
+        
+        return (sparse.kron(D2x, sparse.eye(self.N+1)) + 
+                sparse.kron(sparse.eye(self.N+1), D2y))
+
 
     def get_boundary_indices(self):
         """Return indices of vectorized matrix that belongs to the boundary"""
