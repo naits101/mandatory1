@@ -164,32 +164,21 @@ class Poisson2D:
         The value of u(x, y)
 
         """
-        
-        
         x_point = int(v//self.h)
         y_point = int(w//self.h)
-        print(x_point,y_point)
-        u = self.U[x_point-1 : x_point+1 , y_point-1 : y_point+1]
         
-        N , M = u.shape
+        u = self.U[x_point : x_point+2 , y_point : y_point+2]
         
-        xp = Lagrangebasis(self.xij[x_point-1 : x_point+1 , 0])        
-        yp = Lagrangebasis(self.yij[0 , y_point-1 : y_point+1])
         
+        xp = Lagrangebasis(self.xij[x_point : x_point+2 , 0])        
+        yp = Lagrangebasis(self.yij[0 , y_point : y_point+2])
         
         L2 = 0
-        for i in range(N):
-            for j in range(M):
+        for i in range(2):
+            for j in range(2):
                 
-                L2 += xp[i]*yp[j]*u[i,j]
-        
-        f = L2.subs({x : v, y : w})
-        # print(v,w)
-        from scipy.interpolate import interpn
-        print( f, self.ue.subs({x:x_point/100, y:y_point/100}))
-        # f2 = interpn((xp, yp), u, np.array([v, w]), method = 'linear')
-        # print(f, f2)# self.ue.subs({x: 0.52, y: 0.63}))#, f2)
-        return f
+                L2 += xp[i].subs(x,v)*yp[j].subs(x,w)*u[i,j]
+        return L2
 
         
         
