@@ -37,7 +37,9 @@ class Poisson2D:
 
     def D2(self):
         """Return second order differentiation matrix"""
-        raise NotImplementedError
+        D = sparse.diags([1,-2,1], [-1,0,1], (N+1,N+1),'lil')
+        D[0, : 4] = 2,-5,4,-1
+        D[-1,-4:] = -1,4,-5,2
 
     def laplace(self):
         """Return vectorized Laplace operator"""
