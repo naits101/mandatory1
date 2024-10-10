@@ -17,10 +17,10 @@ class Wave2D:
 
     def create_mesh(self, N, sparse=False):
         """Create 2D mesh and store in self.xij and self.yij"""
-        
+        self.N = N
         x = y = np.linspace(0, self.L, N+1)
         
-        self.xji, self.yij = np.meshgrid(x,y, indexing= 'ij', sparse = sparse)
+        self.xij, self.yij = np.meshgrid(x,y, indexing= 'ij', sparse = sparse)
         
 
     def D2(self, N):
@@ -51,15 +51,21 @@ class Wave2D:
         mx, my : int
             Parameters for the standing wave
         """
-        self.dx = self.L / self.N
-        self.dt = self.w *self.dx /self.c
+        self.L = 1
+        self.mx = mx
+        self.my = my
         
-        u0 = sp.lambdify(x, y, self.ue.subs({L: self.L, c: self.c, t: 0}))
-        self.unm1[:] = u0(self.xji, self.yij)
-        plotdata = {0:self.unm1.copy()}
-        self.un[:] = sp.lambdify(x, y, self.ue.subs({L: self.L, c: self.c, t: self.dt}))
+        self.dx = self.L / N
+        self.create_mesh(N)
+
         
-        plotdata[1] = self.un.copy()
+        u0 = sp.lambdify((x,y),self.ue(mx,my).subs({L:self.L,c:self.c,t:0}))
+        self.unm1 = u0(self.xij, self.yij)
+        # plotdata = {0:self.unm1.copy()}
+        
+        un = sp.lambdify((x, y), self.ue(mx,my).subs({L: self.L, c: self.c, t: self.dt}))
+        self.un = un(self.xij,self.yij)
+        plotdata = {0:self.unm1.copy(),1:self.un.copy()}
         
         return plotdata
         
@@ -67,10 +73,7 @@ class Wave2D:
     @property
     def dt(self):
         """Return the time step"""
-        L = 1
-        self.L = L
-        dt = self.L / self.N
-        return dt #eller Nt?
+        return self.cfl * self.dx * self.c
         
         
 
@@ -84,12 +87,18 @@ class Wave2D:
         t0 : number
             The time of the comparison
         """
-        
-        raise NotImplementedError
+        ue = sp.lambdify((x,y), self.ue(self.mx, self.my)
+                         .subs({L:self.L, c:self.c, t:t0}))(self.xij, self.yij)
+        norm = np.sqrt(self.dx**2*np.sum((ue-u)**2))
+        return norm
 
     def apply_bcs(self):
         
-        raise NotImplementedError
+        # Dirichlet condition
+        self.un[0,:]= 0
+        self.un[-1,:]= 0
+        self.un[:,0]= 0
+        self.un[:,-1]= 0
 
     def __call__(self, N, Nt, cfl=0.5, c=1.0, mx=3, my=3, store_data=-1):
         """Solve the wave equation
@@ -118,12 +127,32 @@ class Wave2D:
         """
         self.cfl = cfl
         self.c = c
-        self.mx = mx
-        self.my = my
-        self.ST = store_data
         self.Nt = Nt
-        self.unp1 =self.un =self.unm1 =np.zeros(N+1)
         
+        plotdata = self.initialize(N, mx, my)
+        dt = self.dt
+        dx = self.dx
+        c2 = (c * dt / dx)**2
+        unp1 = np.zeros_like(self.un)
+        
+        for n in range(1,Nt):
+            unp1[1:-1,1:-1] = (2 * self.un[1:-1, 1:-1] - self.unm1[1:-1,1:-1] + 
+                               c2 *(self.un[2:,1:-1]+ self.un[:-2,1:-1]+ 
+                                    self.un[1:-1,2:]+self.un[1:-1,:-2] -
+                                    4*self.un[1:-1,1:-1]))
+            
+            self.apply_bcs()
+            self.unm1[:] = self.un
+            self.un[:] = unp1
+            
+            if store_data>0 and n % store_data ==0:
+                plotdata[n] = self.un.copy()
+        if store_data > 0:
+            
+            return plotdata
+        else: 
+
+            return dx, self.l2_error(self.un, t0=Nt*dt)
         
 
     def convergence_rates(self, m=4, cfl=0.1, Nt=10, mx=3, my=3):
@@ -153,7 +182,7 @@ class Wave2D:
         N0 = 8
         for m in range(m):
             dx, err = self(N0, Nt, cfl=cfl, mx=mx, my=my, store_data=-1)
-            E.append(err[-1])
+            E.append(err)
             h.append(dx)
             N0 *= 2
             Nt *= 2
@@ -173,28 +202,21 @@ class Wave2D_Neumann(Wave2D):
     
     
     def apply_bcs(self):
-        self.u = np.zeros(self.N+1)
-        self.u[0:0] = self.u[-1:-1] = 0
-        
-        for n in range(1,self.N-1):
-            for j in range (1, self.N-1):
-                possition = u[n:j+1] - 2*u[n:j] + u[n:j-1]
-                u[n+1:j] = 2*u[n:j] - (c*dt / dx)**2 * possition
-                possition = 0
-        raise NotImplementedError
+        # Neumann condition
 
+        self.un[0,:] = self.un[1,:]
+        self.un[-1,:] = self.un[-2,:]        
+        self.un[:,0] = self.un[:,1]
+        self.un[:,-1] = self.un[:,-2]
+        
+        
 def test_convergence_wave2d():
     sol = Wave2D()
-    r, E, h = sol.convergence_rates(mx=2, my=3)
-    assert abs(r[-1]-2) < 1e-2
-    
-test_convergence_wave2d()
-def test_convergence_wave2d_neumann():
-    solN = Wave2D_Neumann()
-    r, E, h = solN.convergence_rates(mx=2, my=3)
-    assert abs(r[-1]-2) < 0.05
+    r, E, h = sol.convergence_rates(m=5, mx=2, my=3)
+    assert abs(r[-1]-2) < 1e-2, r
     
 
-def test_exact_wave2d():
-    
-    raise NotImplementedError
+def test_convergence_wave2d_neumann():
+    solN = Wave2D_Neumann()
+    r, E, h = solN.convergence_rates(m=9,mx=2, my=3)
+    assert abs(r[-1]-2) < 0.05
