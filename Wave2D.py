@@ -220,3 +220,58 @@ def test_convergence_wave2d_neumann():
     solN = Wave2D_Neumann()
     r, E, h = solN.convergence_rates(mx=2, my=3,cfl = 0.005) #satte en lav cfl slik at stabiliteten til funksjonen er bedre
     assert abs(r[-1]-0.5) < 0.05, r #endret til første orden 
+
+def test_exact_solution_wave2d():
+    """Test numerical solution against the exact solution"""
+    mx = my = 1
+    c = 1 / np.sqrt(2)
+    sol = Wave2D()  # Use Dirichlet solution
+    sol.cfl = 0.00000005
+    sol.c = c
+    sol.Nt = 300
+
+
+    sol(N=32, Nt=sol.Nt, cfl=sol.cfl, c=sol.c, mx=mx, my=my, store_data=-1)
+    
+    # Compute the exact solution at time Nt*dt
+    uE = sp.sin( sp.pi * x) * sp.sin( sp.pi * y) * sp.cos(sp.pi* c * t)
+    ue_lambdified = sp.lambdify((x, y), uE.subs({L: sol.L, t: sol.Nt * sol.dt, c: sol.c}))
+    ue_values = ue_lambdified(sol.xij, sol.yij)
+
+    # Compute the error
+    err = np.sqrt(sol.dx**2 * np.sum((ue_values - sol.un)**2))
+    
+    print(f"Error: {err}")
+    assert err < 1e-12, f"Error too high: {err}"
+
+
+def test_exact_solution_neumann():
+    """Test numerical solution against the exact solution"""
+    mx = my = 1
+    c = 1 / np.sqrt(2)
+    sol = Wave2D_Neumann()  # Use Dirichlet solution
+    sol.cfl = 0.1
+    sol.c = c
+    sol.Nt = 100
+
+
+    sol(N=128, Nt=sol.Nt, cfl=sol.cfl, c=sol.c, mx=mx, my=my, store_data=-1)
+    
+    # Compute the exact solution at time Nt*dt
+    uE = sp.sin( sp.pi * x) * sp.sin( sp.pi * y) * sp.cos(sp.pi* c * t)
+    ue_lambdified = sp.lambdify((x, y), uE.subs({L: sol.L, t: sol.Nt * sol.dt, c: sol.c}))
+    ue_values = ue_lambdified(sol.xij, sol.yij)
+
+    # Compute the error
+    err = np.sqrt(sol.dx**2 * np.sum((ue_values - sol.un)**2))
+    
+    print(f"Error: {err}")
+    assert err < 1e-12, f"Error too high: {err}"
+
+
+
+test_convergence_wave2d()
+test_convergence_wave2d_neumann()
+
+test_exact_solution_wave2d()
+#test_exact_solution_neumann()
